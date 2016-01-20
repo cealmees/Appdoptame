@@ -38,46 +38,31 @@ namespace Appdoptame
 
             if (media != null)
             {
-                // Set blob properties of TodoItem.
                 todoItem.ContainerName = "todoitemimages";
-
-                // Use a unigue GUID to avoid collisions.
                 todoItem.ResourceName = Guid.NewGuid().ToString();
             }
 
-            // Send the item to be inserted. When blob properties are set this
-            // generates an SAS in the response.
             await todoTable.InsertAsync(todoItem);
 
-            // If we have a returned SAS, then upload the blob.
             if (!string.IsNullOrEmpty(todoItem.SasQueryString))
             {
-                // Get the URI generated that contains the SAS 
-                // and extract the storage credentials.
                 StorageCredentials cred = new StorageCredentials(todoItem.SasQueryString);
                 var imageUri = new Uri(todoItem.ImageUri);
 
-                // Instantiate a Blob store container based on the info in the returned item.
                 CloudBlobContainer container = new CloudBlobContainer(
                     new Uri(string.Format("https://{0}/{1}",
                         imageUri.Host, todoItem.ContainerName)), cred);
 
-                // Get the new image as a stream.
                 using (var inputStream = await media.OpenReadAsync())
                 {
-                    // Upload the new image as a BLOB from the stream.
                     CloudBlockBlob blobFromSASCredential =
                         container.GetBlockBlobReference(todoItem.ResourceName);
                     await blobFromSASCredential.UploadFromStreamAsync(inputStream);
                 }
-
-                // When you request an SAS at the container-level instead of the blob-level,
-                // you are able to upload multiple streams using the same container credentials.
-
+                
                 await ResetCaptureAsync();
             }
 
-            // Add the new item to the collection.
             items.Add(todoItem);
         }
 
@@ -86,8 +71,6 @@ namespace Appdoptame
             MobileServiceInvalidOperationException exception = null;
             try
             {
-                // This code refreshes the entries in the list view by querying the TodoItems table.
-                // The query excludes completed TodoItems
                 items = await todoTable
                     .Where(todoItem => todoItem.Complete == false)
                     .ToCollectionAsync();
@@ -110,20 +93,16 @@ namespace Appdoptame
 
         private async Task UpdateCheckedTodoItem(DataModel.TodoItem item)
         {
-            // This code takes a freshly completed TodoItem and updates the database. When the MobileService 
-            // responds, the item is removed from the list 
             await todoTable.UpdateAsync(item);
             items.Remove(item);
             ListItems.Focus(Windows.UI.Xaml.FocusState.Unfocused);
 
-            //await SyncAsync(); // offline sync
         }
 
         private async void ButtonRefresh_Click(object sender, RoutedEventArgs e)
         {
             ButtonRefresh.IsEnabled = false;
 
-            //await SyncAsync(); // offline sync
             await RefreshTodoItems();
 
             ButtonRefresh.IsEnabled = true;
@@ -134,10 +113,9 @@ namespace Appdoptame
             
 
             Geolocator geo = new Geolocator();
-            // await this because we don't know hpw long it will take to complete and we don't want to block the UI
-            Geoposition pos = await geo.GetGeopositionAsync(); // get the raw geoposition data
-            double lat = pos.Coordinate.Point.Position.Latitude; // current latitude
-            double longt = pos.Coordinate.Point.Position.Longitude; // current longitude
+            Geoposition pos = await geo.GetGeopositionAsync(); 
+            double lat = pos.Coordinate.Point.Position.Latitude;
+            double longt = pos.Coordinate.Point.Position.Longitude; 
 
             var todoItem = new DataModel.TodoItem
             {
@@ -163,31 +141,9 @@ namespace Appdoptame
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
-            //await InitLocalStoreAsync(); // offline sync
             await RefreshTodoItems();
         }
 
-        #region Offline sync
-
-        //private async Task InitLocalStoreAsync()
-        //{
-        //    if (!App.MobileService.SyncContext.IsInitialized)
-        //    {
-        //        var store = new MobileServiceSQLiteStore("localstore.db");
-        //        store.DefineTable<TodoItem>();
-        //        await App.MobileService.SyncContext.InitializeAsync(store);
-        //    }
-        //
-        //    await SyncAsync();
-        //}
-
-        //private async Task SyncAsync()
-        //{
-        //    await App.MobileService.SyncContext.PushAsync();
-        //    await todoTable.PullAsync("todoItems", todoTable.CreateQuery());
-        //}
-
-        #endregion 
             
         StorageFile media = null;
         MediaCapture cameraCapture;
@@ -199,7 +155,6 @@ namespace Appdoptame
             cameraCapture = new MediaCapture();
             cameraCapture.Failed += cameraCapture_Failed;
 
-            // Initialize the camera for capture.
             await cameraCapture.InitializeAsync();
 
 #if WINDOWS_PHONE_APP
@@ -215,22 +170,18 @@ namespace Appdoptame
 
         private async void previewElement_Tapped(object sender, TappedRoutedEventArgs e)
         {
-            // Block multiple taps.
             if (!IsCaptureInProgress)
             {
                 IsCaptureInProgress = true;
 
-                // Create the temporary storage file.
                 media = await ApplicationData.Current.LocalFolder
                     .CreateFileAsync("capture_file.jpg", CreationCollisionOption.ReplaceExisting);
 
-                // Take the picture and store it locally as a JPEG.
                 await cameraCapture.CapturePhotoToStorageFileAsync(
                     ImageEncodingProperties.CreateJpeg(), media);
 
                 captureButtons.Visibility = Visibility.Visible;
 
-                // Use the stored image as the preview source.
                 BitmapImage tempBitmap = new BitmapImage(new Uri(media.Path));
                 imagePreview.Source = tempBitmap;
                 imagePreview.Visibility = Visibility.Visible;
@@ -241,7 +192,6 @@ namespace Appdoptame
 
         private async void cameraCapture_Failed(MediaCapture sender, MediaCaptureFailedEventArgs errorEventArgs)
         {
-            // It's safest to return this back onto the UI thread to show the message dialog.
             MessageDialog dialog = new MessageDialog(errorEventArgs.Message);
             await this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal,
                 async () => { await dialog.ShowAsync(); });
@@ -249,7 +199,6 @@ namespace Appdoptame
 
         private async void ButtonCapture_Click(object sender, RoutedEventArgs e)
         {
-            // Prevent multiple initializations.
             ButtonCapture.IsEnabled = false;
 
             await CaptureImage();
@@ -261,7 +210,6 @@ namespace Appdoptame
 
         private async void ButtonRetake_Click(object sender, Windows.UI.Xaml.RoutedEventArgs e)
         {
-            // Reset the capture and then start again.
             await ResetCaptureAsync();
             await CaptureImage();
         }
@@ -279,7 +227,6 @@ namespace Appdoptame
             previewElement.Source = null;
             ButtonCapture.IsEnabled = true;
 
-            // Make sure we stop the preview and release resources.
             await cameraCapture.StopPreviewAsync();
             cameraCapture.Dispose();
             media = null;
